@@ -5,6 +5,7 @@ import { useAuth } from '../auth.js';
 import { upload } from '../api.js';
 import { limitsFor } from '../lib/limits.js';
 import PlanBanner from '../components/PlanBanner.jsx';
+import Dropzone from '../components/Dropzone.jsx';
 
 const ext = (n) => { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i) : ''; };
 
@@ -59,8 +60,13 @@ function Convert() {
               <button key={k} className={'btn small' + (mode === k ? '' : ' alt')} onClick={() => { setMode(k); setFile(null); setMsg(''); }}>{v[0]}</button>
             ))}
           </div>
-          <label htmlFor="cf">Choose a file ({modes[mode][1]})</label>
-          <input id="cf" key={mode} className="field" type="file" accept={modes[mode][1]} onChange={(e) => setFile(e.target.files[0] || null)} />
+          <Dropzone
+            onFile={(f) => setFile(f)}
+            accept={modes[mode][1]}
+            label={`Drag & drop ${modes[mode][0]} file`}
+            subtitle={`Accepts ${modes[mode][1]}`}
+          />
+          {file && <p className="ok gap">Selected: <b>{file.name}</b></p>}
           <button className="btn block gap" disabled={!file || busy} onClick={go}>{busy ? 'Converting... this can take a minute' : 'Convert and download'}</button>
           <p className="muted">Your {lim.plan} plan: {lim.convert} conversions per day. The file is uploaded to our server and deleted right after.</p>
           {msg && <p role="status" className="note">{msg}</p>}
@@ -91,8 +97,12 @@ function Rename() {
         <p className="lock">Bulk rename needs a free account. <Link to="/login?mode=register">Sign up</Link> or <Link to="/login">log in</Link>.</p>
       ) : (
         <>
-          <label htmlFor="rf">Choose files</label>
-          <input id="rf" className="field" type="file" multiple onChange={(e) => setFiles([...e.target.files])} />
+          <Dropzone
+            onFile={(newFiles) => setFiles(newFiles)}
+            multiple={true}
+            label="Drag & drop files to bulk rename"
+            subtitle="Choose or drop multiple files"
+          />
           <div className="rules gap">
             <div><label htmlFor="pf">Name starts with</label><input id="pf" className="field" value={prefix} onChange={(e) => setPrefix(e.target.value)} /></div>
             <div><label htmlFor="st">First number</label><input id="st" className="field" inputMode="numeric" value={start} onChange={(e) => setStart(e.target.value)} /></div>

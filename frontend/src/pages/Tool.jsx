@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.js';
-import { parseRules, processImage, validate } from '../lib/image.js';
+import { parseRules, processImage, validate, EXAM_PRESETS } from '../lib/image.js';
 import PlanBanner from '../components/PlanBanner.jsx';
+import Dropzone from '../components/Dropzone.jsx';
+import CropBox from '../components/CropBox.jsx';
 
-const empty = { format: 'image/jpeg', fit: 'crop', width: '', height: '', minKB: '', maxKB: '' };
+const empty = { format: 'image/jpeg', fit: 'crop', width: '', height: '', minKB: '', maxKB: '', filter: 'none' };
 const num = (v) => (v === '' || v == null ? undefined : Number(v));
 
 export default function Tool() {
@@ -14,6 +16,8 @@ export default function Tool() {
   const [file, setFile] = useState(null);
   const [text, setText] = useState(loc.state?.text || '');
   const [r, setR] = useState(empty);
+  const [crop, setCrop] = useState(null);
+  const [showCrop, setShowCrop] = useState(false);
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -28,7 +32,7 @@ export default function Tool() {
 
   const set = (k) => (e) => setR({ ...r, [k]: e.target.value });
   const rules = () => ({
-    format: r.format, fit: r.fit,
+    format: r.format, fit: r.fit, filter: r.filter, crop: showCrop ? crop : null,
     width: num(r.width), height: num(r.height), minKB: num(r.minKB), maxKB: num(r.maxKB),
   });
 
@@ -41,6 +45,24 @@ export default function Tool() {
       minKB: p.minKB ?? r.minKB, maxKB: p.maxKB ?? r.maxKB,
     });
     setMsg(Object.keys(p).length ? 'Rules filled in. Check them, then make your file.' : 'We could not find any rules in that text. Fill them in below.');
+  }
+
+  function handleExamPreset(e) {
+    const idx = e.target.value;
+    if (idx === '') return;
+    const item = EXAM_PRESETS[idx];
+    if (item && item.rules) {
+      setR({
+        ...r,
+        format: item.rules.format || r.format,
+        fit: item.rules.fit || r.fit,
+        width: item.rules.width ?? '',
+        height: item.rules.height ?? '',
+        minKB: item.rules.minKB ?? '',
+        maxKB: item.rules.maxKB ?? '',
+      });
+      setMsg(`Applied ${item.label}`);
+    }
   }
 
   async function run() {
@@ -58,6 +80,10 @@ export default function Tool() {
   }
 
   async function savePreset() {
+    if (!user) {
+      setMsg('Please log in or sign up to save presets.');
+      return;
+    }
     const name = window.prompt('Name this preset');
     if (!name) return;
     try {
@@ -71,7 +97,7 @@ export default function Tool() {
     const p = presets.find((x) => x.id === id);
     if (!p) return;
     setR({
-      format: p.format || 'image/jpeg', fit: p.fit || 'crop',
+      format: p.format || 'image/jpeg', fit: p.fit || 'crop', filter: r.filter,
       width: p.width ?? '', height: p.height ?? '', minKB: p.minKB ?? '', maxKB: p.maxKB ?? '',
     });
   }
@@ -85,26 +111,56 @@ export default function Tool() {
   return (
     <main className="wrap">
       <h1>Make your file match the form rules</h1>
-      <p className="muted lead">Add your photo, set the rules, and download a file that passes. Your photo stays on your device.</p>
+      <p className="muted lead">Add your photo or signature, set the rules, and download a compliant file that passes. 100% private.</p>
       <PlanBanner />
 
       <section className="card">
-        <label htmlFor="rules">Paste the form rules (optional)</label>
+        <label htmlFor="exam-sel">⚡ Fast Template (UPSC, SSC, NEET, PAN, Visa)</label>
+        <select id="exam-sel" className="field" defaultValue="" onChange={handleExamPreset}>
+          {EXAM_PRESETS.map((p, i) => (
+            <option key={i} value={i === 0 ? '' : i}>{p.label}</option>
+          ))}
+        </select>
+
+        <label htmlFor="rules" className="mt">Or paste custom form rules from notification / website</label>
         <textarea id="rules" rows="2" value={text} onChange={(e) => setText(e.target.value)}
           placeholder="e.g. Signature must be JPEG, 10-20 KB, 140 x 60 px" />
-        <button className="btn alt" onClick={fill}>Fill in the rules</button>
+        <button className="btn alt" onClick={fill}>Auto-fill rules from text</button>
       </section>
 
       <div className="grid2">
         <section className="card">
           <h2>1. Add your file</h2>
-          <label htmlFor="file">Choose an image</label>
-          <input id="file" className="field" type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0] || null)} />
-          <label htmlFor="cam">Or take a photo</label>
-          <input id="cam" className="field" type="file" accept="image/*" capture="environment" onChange={(e) => setFile(e.target.files[0] || null)} />
-          {file && <p className="muted">{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>}
+          <Dropzone
+            onFile={(f) => setFile(f)}
+            accept="image/jpeg,image/png,image/webp"
+            label="Drag & drop your photo or signature"
+            subtitle="JPG, PNG, or WebP up to 25MB"
+          />
+          {file && (
+            <div className="gap">
+              <p className="ok">Selected: <b>{file.name}</b> ({(file.size / 1024).toFixed(0)} KB)</p>
+              <div className="row">
+                <span><b>Live Visual Crop Box</b></span>
+                <button
+                  type="button"
+                  className={`btn small ${showCrop ? '' : 'alt'}`}
+                  onClick={() => setShowCrop(!showCrop)}
+                >
+                  {showCrop ? 'Disable Crop Box' : 'Enable Crop Box'}
+                </button>
+              </div>
+              {showCrop && (
+                <CropBox
+                  file={file}
+                  onCropChange={setCrop}
+                  aspect={r.width && r.height ? Number(r.width) / Number(r.height) : undefined}
+                />
+              )}
+            </div>
+          )}
 
-          <h2>2. Your rules</h2>
+          <h2>2. Your rules & Clean-up</h2>
           {presets.length > 0 && (
             <>
               <label htmlFor="preset">Saved presets</label>
@@ -114,6 +170,16 @@ export default function Tool() {
               </select>
             </>
           )}
+
+          <label htmlFor="flt">✨ Filter & Clean-up (Optional)</label>
+          <select id="flt" className="field" value={r.filter} onChange={set('filter')}>
+            <option value="none">Original Colors (No Filter)</option>
+            <option value="bw-signature">Clean Signature (Paper to Pure White, Ink to Dark)</option>
+            <option value="whiten-bg">Whiten Background (Passport Studio White BG)</option>
+            <option value="grayscale">Black & White (Grayscale)</option>
+            <option value="contrast">Boost Contrast</option>
+          </select>
+
           <div className="rules">
             <div><label htmlFor="f">Format</label>
               <select id="f" className="field" value={r.format} onChange={set('format')}>
@@ -128,7 +194,7 @@ export default function Tool() {
             <div><label htmlFor="w">Width (px)</label><input id="w" className="field" inputMode="numeric" value={r.width} onChange={set('width')} /></div>
             <div><label htmlFor="h">Height (px)</label><input id="h" className="field" inputMode="numeric" value={r.height} onChange={set('height')} /></div>
           </div>
-          <button className="btn block" onClick={run} disabled={busy}>{busy ? 'Working...' : 'Make my file'}</button>
+          <button className="btn block" onClick={run} disabled={busy}>{busy ? 'Processing...' : 'Make my file'}</button>
           {user ? <button className="btn alt block gap" onClick={savePreset}>Save these rules as a preset</button> : <p className="lock">Saving presets needs a free account. <Link to="/login?mode=register">Sign up</Link></p>}
           {msg && <p role="status" className="note">{msg}</p>}
         </section>

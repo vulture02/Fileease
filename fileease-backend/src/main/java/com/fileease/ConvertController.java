@@ -56,7 +56,13 @@ public class ConvertController {
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown conversion");
         }
 
-        // 3. run LibreOffice in a temporary folder, then delete everything
+        // 3. check if LibreOffice is installed
+        if (!Files.exists(Path.of(soffice))) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "LibreOffice is not installed on this system at: " + soffice + ". Please install LibreOffice from https://www.libreoffice.org to enable Word/Excel/PDF conversions.");
+        }
+
+        // 4. run LibreOffice in a temporary folder, then delete everything
         Path dir = Files.createTempDirectory("fileease-");
         try {
             String ext = name.substring(name.lastIndexOf('.'));

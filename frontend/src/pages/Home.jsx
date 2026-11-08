@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const tiles = [
-  { title: 'Photo or signature', sub: 'Exact pixels and KB', to: '/prepare' },
-  { title: 'PDF tools', sub: 'Merge, split, compress' },
-  { title: 'Word or Excel to PDF', sub: 'Both directions' },
+  { title: 'Photo or signature', sub: 'Exact pixels, KB & clean-up', to: '/prepare' },
+  { title: 'PDF tools', sub: 'Merge, split, rotate client-side', to: '/pdf' },
+  { title: 'Word or Excel to PDF', sub: 'Server-side document conversion', to: '/tools' },
   { title: 'Bulk rename', sub: 'Hundreds of files at once', to: '/tools' },
   { title: 'Duplicate finder', sub: 'Find and remove copies', to: '/tools' },
-  { title: 'Photo sheet', sub: 'Passport photos on A4' },
+  { title: 'Passport photo sheet', sub: 'Print-ready on 4×6 or A4', to: '/photosheet' },
 ];
 
 export default function Home() {
@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <main className="wrap hero">
       <h1>Make your file match<br />the form rules</h1>
-      <p className="muted lead">Paste the rules, add your file, and we resize, compress and check it for you.</p>
+      <p className="muted lead">Paste the rules, add your file, and we resize, compress and check it for you. Plus PDF tools & passport sheets.</p>
 
       <section className="card">
         <label htmlFor="rules">Paste the form rules (optional)</label>
@@ -40,7 +40,7 @@ export default function Home() {
           )
         )}
       </div>
-      <p className="muted mt">Your photos stay on your device. Nothing is uploaded for image tools.</p>
+      <p className="muted mt">Your files stay on your device for image tools and PDF tools. Nothing is uploaded unless converting Word/Excel.</p>
     </main>
   );
 }
