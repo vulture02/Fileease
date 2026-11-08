@@ -47,7 +47,13 @@ export default function Dropzone({ onFile, accept, multiple = false, label = "Dr
         style={{ display: 'none' }}
         onChange={handleChange}
       />
-      <div className="dropzone-icon">📁</div>
+      <div className="dropzone-icon">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+          <path d="M12 12v9"></path>
+          <path d="m16 16-4-4-4 4"></path>
+        </svg>
+      </div>
       <p className="dropzone-text"><b>{label}</b></p>
       {subtitle && <p className="dropzone-sub muted">{subtitle}</p>}
     </div>

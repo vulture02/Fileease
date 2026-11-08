@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import JSZip from 'jszip';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth.js';
@@ -126,6 +126,7 @@ function Dupes() {
   const lim = limitsFor(user);
   const [busy, setBusy] = useState(false);
   const [limitMsg, setLimitMsg] = useState('');
+  const folderInputRef = useRef(null);
 
   async function scan(e) {
     const files = [...e.target.files];
@@ -163,8 +164,30 @@ function Dupes() {
         <p className="lock">Duplicate finder needs a free account. <Link to="/login?mode=register">Sign up</Link> or <Link to="/login">log in</Link>.</p>
       ) : (
         <>
-          <label htmlFor="df">Choose a folder</label>
-          <input id="df" className="field" type="file" multiple webkitdirectory="" onChange={scan} />
+          <div
+            className="dropzone"
+            onClick={() => folderInputRef.current && folderInputRef.current.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') folderInputRef.current?.click(); }}
+          >
+            <input
+              ref={folderInputRef}
+              id="df"
+              type="file"
+              multiple
+              webkitdirectory=""
+              style={{ display: 'none' }}
+              onChange={scan}
+            />
+            <div className="dropzone-icon">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <p className="dropzone-text"><b>Click to select a folder</b></p>
+            <p className="dropzone-sub muted">Scans and groups duplicates safely on device</p>
+          </div>
           <p className="muted">Scanning happens on your device. Browsers cannot delete files from your computer, so you get a ZIP of the unique files.</p>
           {busy && <p role="status">Scanning...</p>}
           {limitMsg && <p className="note">{limitMsg}</p>}

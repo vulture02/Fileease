@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.js';
@@ -23,6 +23,12 @@ export default function Tool() {
   const [msg, setMsg] = useState('');
   const [presets, setPresets] = useState([]);
 
+  // Manual brush touch-up state
+  const [brushActive, setBrushActive] = useState(false);
+  const [brushSize, setBrushSize] = useState(25);
+  const brushCanvasRef = useRef(null);
+  const isPaintingRef = useRef(false);
+
   useEffect(() => {
     if (user) api('/presets').then(setPresets).catch(() => {});
     else setPresets([]);
@@ -30,10 +36,24 @@ export default function Tool() {
 
   useEffect(() => { if (loc.state?.text) fill(); }, []);
 
+  useEffect(() => {
+    if (!brushActive || !res || !brushCanvasRef.current) return;
+    const canvas = brushCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.src = res.url;
+    img.onload = () => {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+    };
+  }, [brushActive, res]);
+
   const set = (k) => (e) => setR({ ...r, [k]: e.target.value });
-  const rules = () => ({
+  const rules = (extra = {}) => ({
     format: r.format, fit: r.fit, filter: r.filter, crop: showCrop ? crop : null,
     width: num(r.width), height: num(r.height), minKB: num(r.minKB), maxKB: num(r.maxKB),
+    ...extra,
   });
 
   function fill() {
@@ -65,18 +85,65 @@ export default function Tool() {
     }
   }
 
-  async function run() {
+  async function run(extraOptions = {}) {
     if (!file) { setMsg('Choose a file first.'); return; }
-    setBusy(true); setMsg('');
+    setBusy(true);
+    setMsg(r.filter === 'whiten-bg' ? 'AI is isolating the person and making the background solid white...' : '');
     try {
       if (res) URL.revokeObjectURL(res.url);
-      const o = rules();
+      const o = rules(extraOptions);
       const out = await processImage(file, o);
       setRes({ ...out, url: URL.createObjectURL(out.blob), checks: validate(out, o), before: file.size, o });
+      setMsg(r.filter === 'whiten-bg' ? 'Person isolated successfully! Background is now pure white.' : '');
     } catch {
       setMsg('We could not read this file. Try a JPG or PNG.');
     }
     setBusy(false);
+  }
+
+  function paintAt(e) {
+    const canvas = brushCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(x, y, brushSize * (canvas.width / 400), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function handleBrushMouseDown(e) {
+    isPaintingRef.current = true;
+    paintAt(e);
+  }
+
+  function handleBrushMouseMove(e) {
+    if (!isPaintingRef.current) return;
+    paintAt(e);
+  }
+
+  function handleBrushMouseUp() {
+    isPaintingRef.current = false;
+  }
+
+  function saveBrushTouchup() {
+    const canvas = brushCanvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob((blob) => {
+      if (res.url) URL.revokeObjectURL(res.url);
+      setRes({
+        ...res,
+        blob,
+        url: URL.createObjectURL(blob),
+      });
+      setBrushActive(false);
+      setMsg('Touch-up applied!');
+    }, res.blob.type || 'image/jpeg', 0.95);
   }
 
   async function savePreset() {
@@ -141,7 +208,7 @@ export default function Tool() {
             <div className="gap">
               <p className="ok">Selected: <b>{file.name}</b> ({(file.size / 1024).toFixed(0)} KB)</p>
               <div className="row">
-                <span><b>Live Visual Crop Box</b></span>
+                <span><b>Live Visual Crop Box</b> (Crop around face & shoulders)</span>
                 <button
                   type="button"
                   className={`btn small ${showCrop ? '' : 'alt'}`}
@@ -171,16 +238,16 @@ export default function Tool() {
             </>
           )}
 
-          <label htmlFor="flt">✨ Filter & Clean-up (Optional)</label>
+          <label htmlFor="flt">✨ Filter & Clean-up</label>
           <select id="flt" className="field" value={r.filter} onChange={set('filter')}>
             <option value="none">Original Colors (No Filter)</option>
+            <option value="whiten-bg">Whiten Background (AI Auto-Cut Person, Solid White BG)</option>
             <option value="bw-signature">Clean Signature (Paper to Pure White, Ink to Dark)</option>
-            <option value="whiten-bg">Whiten Background (Passport Studio White BG)</option>
             <option value="grayscale">Black & White (Grayscale)</option>
             <option value="contrast">Boost Contrast</option>
           </select>
 
-          <div className="rules">
+          <div className="rules gap">
             <div><label htmlFor="f">Format</label>
               <select id="f" className="field" value={r.format} onChange={set('format')}>
                 <option value="image/jpeg">JPG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option>
@@ -194,7 +261,9 @@ export default function Tool() {
             <div><label htmlFor="w">Width (px)</label><input id="w" className="field" inputMode="numeric" value={r.width} onChange={set('width')} /></div>
             <div><label htmlFor="h">Height (px)</label><input id="h" className="field" inputMode="numeric" value={r.height} onChange={set('height')} /></div>
           </div>
-          <button className="btn block" onClick={run} disabled={busy}>{busy ? 'Processing...' : 'Make my file'}</button>
+          <button className="btn block" onClick={() => run()} disabled={busy}>
+            {busy ? (r.filter === 'whiten-bg' ? 'AI isolating person...' : 'Processing...') : 'Make my file'}
+          </button>
           {user ? <button className="btn alt block gap" onClick={savePreset}>Save these rules as a preset</button> : <p className="lock">Saving presets needs a free account. <Link to="/login?mode=register">Sign up</Link></p>}
           {msg && <p role="status" className="note">{msg}</p>}
         </section>
@@ -208,7 +277,64 @@ export default function Tool() {
                 <div className="box"><span className="muted">Before</span><b>{(res.before / 1024).toFixed(0)} KB</b></div>
                 <div className={'box ' + (allPass ? 'good' : 'bad')}><span className="muted">After</span><b>{(res.blob.size / 1024).toFixed(1)} KB</b><span className="muted">{res.width} x {res.height} px</span></div>
               </div>
-              <img className="preview" src={res.url} alt="Preview of your processed file" />
+
+              {!brushActive ? (
+                <>
+                  <img
+                    className="preview"
+                    src={res.url}
+                    alt="Preview of your processed file"
+                  />
+                  {r.filter === 'whiten-bg' && (
+                    <div className="btnrow gap" style={{ justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn small alt"
+                        onClick={() => setBrushActive(true)}
+                      >
+                        🖌️ Optional Touch-up Brush
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="gap">
+                  <div className="row">
+                    <span><b>Drag mouse over image to paint white:</b></span>
+                    <button type="button" className="btn small alt" onClick={() => setBrushActive(false)}>Cancel</button>
+                  </div>
+                  <canvas
+                    ref={brushCanvasRef}
+                    onMouseDown={handleBrushMouseDown}
+                    onMouseMove={handleBrushMouseMove}
+                    onMouseUp={handleBrushMouseUp}
+                    onMouseLeave={handleBrushMouseUp}
+                    style={{
+                      display: 'block',
+                      maxWidth: '100%',
+                      margin: '8px auto',
+                      border: '2px dashed var(--blue)',
+                      borderRadius: '8px',
+                      cursor: 'crosshair',
+                      touchAction: 'none',
+                    }}
+                  />
+                  <div className="row">
+                    <span>Brush Size ({brushSize}px)</span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="70"
+                      value={brushSize}
+                      onChange={(e) => setBrushSize(Number(e.target.value))}
+                    />
+                  </div>
+                  <button type="button" className="btn block gap" onClick={saveBrushTouchup}>
+                    ✓ Done & Apply Touch-up
+                  </button>
+                </div>
+              )}
+
               {res.checks.map((c) => (
                 <div className="row" key={c.label}>
                   <span>{c.label}: {c.detail}</span>
